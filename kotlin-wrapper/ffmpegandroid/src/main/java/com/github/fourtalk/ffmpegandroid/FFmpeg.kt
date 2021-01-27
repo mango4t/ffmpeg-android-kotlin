@@ -102,7 +102,6 @@ class FFmpeg(context: Context) {
         val task = FFmpegExecuteAsyncTask(
                 id = taskId,
                 context = context,
-                initBinary = true,
                 cmd = command,
                 envp = getFFmpegDefaultEnvironment(context, environvenmentVars),
                 timeout = timeout,

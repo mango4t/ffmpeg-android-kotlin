@@ -1,44 +1,51 @@
 package com.github.fourtalk.ffmpegandroid
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import java.io.*
+import java.util.*
 
 internal class NativeCpuHelper {
     external fun isCpuSupported(): Boolean
 
     @Suppress("DEPRECATION")
     companion object {
+        @SuppressLint("ConstantLocale")
+        private val locale = Locale.getDefault()
+
         init {
-            if (Build.CPU_ABI.toLowerCase() == "armeabi-v7a")
+            if (Build.CPU_ABI.toLowerCase(locale) == "armeabi-v7a")
                 System.loadLibrary("cpucheck")
         }
 
         val supportsFFmpeg: Boolean =
-                when (Build.CPU_ABI.toLowerCase()) {
+                when (Build.CPU_ABI.toLowerCase(locale)) {
                     "x86", "x86_64", "arm64-v8a" -> true
                     "armeabi-v7a" -> NativeCpuHelper().isCpuSupported()
                     else -> false
                 }
 
         fun assetsDir(context: Context): String =
-            if (context.assets.list(Build.CPU_ABI.toLowerCase())?.contains(ffmpegFileName) == true)
-                Build.CPU_ABI.toLowerCase()
-            else
-            // старая схема для apk (без сборки x64)
-            if (Build.CPU_ABI.toLowerCase().startsWith("arm"))
-                "armeabi-v7a"
-            else if (Build.CPU_ABI.toLowerCase().startsWith("x86"))
-                "x86"
-            else
-                "armeabi-v7a" // fallback
+                when {
+                    context.assets.list(Build.CPU_ABI.toLowerCase(locale))?.contains(ffmpegFileName) == true ->
+                        Build.CPU_ABI.toLowerCase(locale)
+
+                    // старая схема для apk (без сборки x64)
+                    Build.CPU_ABI.toLowerCase(locale).startsWith("arm") ->
+                        "armeabi-v7a"
+                    Build.CPU_ABI.toLowerCase(locale).startsWith("x86") ->
+                        "x86"
+                    else ->
+                        "armeabi-v7a"
+                } // fallback
     }
 }
 
 private const val TAG = "FFmpegUtils"
-private const val ffmpegFileName = "ffmpeg"
+private const val ffmpegFileName = "libffmpeg.so"
 private const val h264FileName = "libopenh264.so"
 private const val DEFAULT_BUFFER_SIZE = 1024 * 4
 private const val EOF = -1
@@ -74,17 +81,14 @@ private fun getFilesDirectory(context: Context): File {
     return context.filesDir
 }
 
-private fun getExecuteDir(context: Context): String {
-    return getFilesDirectory(context).absolutePath
-}
+private fun getExecuteDir(context: Context): String =
+    context.applicationInfo.nativeLibraryDir
 
-internal fun getFFmpeg(context: Context): String {
-    return getExecuteDir(context) + File.separator + ffmpegFileName
-}
+internal fun getFFmpeg(context: Context): String =
+    getExecuteDir(context) + File.separator + ffmpegFileName
 
-internal fun getH264(context: Context): String {
-    return getExecuteDir(context) + File.separator + h264FileName
-}
+internal fun getH264(context: Context): String =
+    getExecuteDir(context) + File.separator + h264FileName
 
 internal fun getFFmpegDefaultEnvironment(context: Context, envp: Map<String, String>?): List<String> {
     val rc = mutableListOf(
@@ -120,14 +124,12 @@ internal fun isProcessCompleted(process: Process?): Boolean =
         false
     }
 
-internal fun openContentInputStream(context: Context, uri: Uri): InputStream? {
+internal fun openContentInputStream(context: Context, uri: Uri): InputStream? =
     try {
-        return context.contentResolver.openInputStream(uri)
+        context.contentResolver.openInputStream(uri) ?: FileInputStream(uri.path)
+    } catch (ex: Exception) {
+        FileInputStream(uri.path)
     }
-    catch (ex: Exception) {
-        return FileInputStream(uri.path)
-    }
-}
 
 /** get real InputStream size */
 internal fun InputStream.getInputStreamReadLength(): Int {

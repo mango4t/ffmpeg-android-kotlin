@@ -3,12 +3,12 @@ package com.github.fourtalk.ffmpegandroid
 import android.content.Context
 import android.os.AsyncTask
 import android.os.Build
-import android.os.HandlerThread
 import android.util.Log
 import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
 import java.io.InputStreamReader
+import java.util.*
 import java.util.concurrent.TimeoutException
 
 interface TaskResponseHandler {
@@ -35,7 +35,6 @@ interface TaskResponseHandler {
 internal class FFmpegExecuteAsyncTask(
         val id: String,
         private val context: Context,
-        private var initBinary: Boolean,
         private val cmd: List<String>,
         private val envp: List<String>,
         private val timeout: Long,
@@ -79,11 +78,6 @@ internal class FFmpegExecuteAsyncTask(
     override fun doInBackground(vararg params: Void): CommandResult {
         if (!isCancelled)
         try {
-            if (initBinary) {
-                initBinary = false
-                checkBinary()
-            }
-
             if (!isCancelled)
                 process = run(cmd, envp)
             if (process == null)
@@ -168,22 +162,22 @@ internal class FFmpegExecuteAsyncTask(
     val isProcessCompleted: Boolean
         get() = isProcessCompleted(process)
 
-    private fun isAssetFileSizeDiffer(file: File, assetFileName: String): Boolean {
+    private fun isAssetFileSizeDiffer(file: File, assetFileName: String): Boolean =
         try {
             val assetsSize = context.assets.open(assetFileName).use {
                 it.available()
             }
-            return assetsSize > 0 && assetsSize < Int.MAX_VALUE/4 // InputStream.available() can fail
+            assetsSize > 0 && assetsSize < Int.MAX_VALUE/4 // InputStream.available() can fail
                     && assetsSize.toLong() != file.length()
         } catch (e: Throwable) {
-            Log.e(TAG, e.message)
-            return false
+            Log.e(TAG, e.message ?: "error")
+            false
         }
-    }
 
     private fun prepareFile(file: File): Boolean {
         val assetFileName = NativeCpuHelper.assetsDir(context) + File.separator + file.name
-        Log.i(TAG, "assets = ${context.assets.list(Build.CPU_ABI.toLowerCase())?.joinToString()}")
+        @Suppress("DEPRECATION")
+        Log.i(TAG, "assets = ${context.assets.list(Build.CPU_ABI.toLowerCase(Locale.getDefault()))?.joinToString()}")
         Log.i(TAG, "assetFileName = $assetFileName")
 
         if (file.exists() && isAssetFileSizeDiffer(file, assetFileName) && !file.delete()) {
@@ -207,12 +201,6 @@ internal class FFmpegExecuteAsyncTask(
         return file.exists() && file.canExecute()
     }
 
-    private fun checkBinary(): Boolean {
-        val ffmpegFile = File(getFFmpeg(context))
-        val h264File = File(getH264(context))
-        return prepareFile(h264File) && prepareFile(ffmpegFile)
-    }
-
     fun kill(): Boolean {
         val rc = !isCancelled && cancel(true)
         process?.destroy()
@@ -220,7 +208,7 @@ internal class FFmpegExecuteAsyncTask(
     }
 
     companion object {
-        private val TAG = "FFmpeg"
+        private const val TAG = "FFmpeg"
 
         fun run(commandString: List<String>, envp: List<String>?): Process? {
             var process: Process? = null
@@ -228,7 +216,7 @@ internal class FFmpegExecuteAsyncTask(
                 Log.i(TAG, "exec '$commandString' with environment '$envp}'")
                 process = Runtime.getRuntime().exec(commandString.toTypedArray(), envp?.toTypedArray())
             } catch (e: IOException) {
-                Log.e(TAG, "Exception while trying to run: " + commandString, e)
+                Log.e(TAG, "Exception while trying to run: $commandString", e)
             }
             return process
         }
