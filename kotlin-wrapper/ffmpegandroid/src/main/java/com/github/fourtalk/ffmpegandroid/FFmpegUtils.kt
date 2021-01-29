@@ -8,6 +8,12 @@ import android.util.Log
 import java.io.*
 import java.util.*
 
+private const val TAG = "FFmpegUtils"
+private const val ffmpegFileName = "libffmpeg.so"
+private const val h264FileName = "libopenh264.so"
+private const val DEFAULT_BUFFER_SIZE = 1024 * 4
+private const val EOF = -1
+
 internal class NativeCpuHelper {
     external fun isCpuSupported(): Boolean
 
@@ -19,6 +25,8 @@ internal class NativeCpuHelper {
         init {
             if (Build.CPU_ABI.toLowerCase(locale) == "armeabi-v7a")
                 System.loadLibrary("cpucheck")
+            try { System.loadLibrary("ffmpeg") } catch (e: Throwable) {}
+            try { System.loadLibrary("openh264") } catch (e: Throwable) {}
         }
 
         val supportsFFmpeg: Boolean =
@@ -43,12 +51,6 @@ internal class NativeCpuHelper {
                 } // fallback
     }
 }
-
-private const val TAG = "FFmpegUtils"
-private const val ffmpegFileName = "libffmpeg.so"
-private const val h264FileName = "libopenh264.so"
-private const val DEFAULT_BUFFER_SIZE = 1024 * 4
-private const val EOF = -1
 
 fun copyBinaryFromAssetsToData(context: Context, fileNameFromAssets: String, outputFileName: String): Boolean {
     var rc = false
